@@ -4,6 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
 
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
 from constants import *
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')

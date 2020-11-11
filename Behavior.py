@@ -3,6 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
+from torch.distributions import Categorical
+
+from utils import *
 
 class Behavior(nn.Module):
     '''
@@ -118,4 +121,4 @@ class Behavior(nn.Module):
         self.load_state_dict(torch.load(filename))
 
 if __name__ == "__main__":
-            
+    pass

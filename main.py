@@ -3,15 +3,17 @@ import gym
 from utils import *
 from replayBuffer import *
 from constants import *
+from Behavior import *
 
 seed = 0
 np.random.seed(seed)
 torch.manual_seed(seed)
 
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 env = gym.make('LunarLander-v2') # RocketLander-v0 | LunarLander-v2 | MountainCar-v0 | CartPole-v0
 _ = env.seed(seed)
+state_size = env.observation_space.shape[0]
+action_size = env.action_space.n
 
 def initialize_replay_buffer(replay_size, n_episodes, last_few):
     '''
@@ -68,6 +70,139 @@ def initialize_behavior_function(state_size,
     
     return behavior    
 
+def train_behavior(behavior, buffer, n_updates, batch_size):
+    '''Training loop
+    
+    Params:
+        behavior (Behavior)
+        buffer (ReplayBuffer)
+        n_updates (int):
+            how many updates we're gonna perform
+        batch_size (int):
+            size of the bacth we're gonna use to train on
+    
+    Returns:
+        float -- mean loss after all the updates
+    '''
+    all_loss = []
+    for update in range(n_updates):
+        episodes = buffer.random_batch(batch_size)
+
+        batch_states = []
+        batch_commands = []
+        batch_actions = []
+
+        for episode in episodes:
+            T = episode.length
+            t1  = np.random.randint(0, T)
+            t2  = np.random.randint(t1+1, T+1)
+            dh = t2 - t1
+            dr = sum(episode.rewards[t1:t2])
+
+            st1 = episode.states[t1]
+            at1 = episode.actions[t1]
+
+            batch_states.append(st1)
+            batch_actions.append(at1)
+            batch_commands.append([dr, dh])
+
+        batch_states = torch.FloatTensor(batch_states).to(device)
+        batch_commands = torch.FloatTensor(batch_commands).to(device)
+        batch_actions = torch.LongTensor(batch_actions).to(device)
+
+        pred = behavior(batch_states, batch_commands)
+
+        loss = F.cross_entropy(pred, batch_actions)    
+
+        behavior.optim.zero_grad()
+        loss.backward()
+        behavior.optim.step()
+        
+        all_loss.append(loss.item())
+    
+    return np.mean(all_loss)
+
+def generate_episodes(env, behavior, buffer, n_episodes, last_few):
+    '''
+    1. Sample exploratory commands based on replay buffer
+    2. Generate episodes using Algorithm 2 and add to replay buffer
+    
+    Params:
+        env (OpenAI Gym Environment)
+        behavior (Behavior)
+        buffer (ReplayBuffer)
+        n_episodes (int)
+        last_few (int):
+            how many episodes we use to calculate the desired return and horizon
+    '''
+
+    stochastic_policy = lambda state, command: behavior.action(state, command)
+
+    for i in range(n_episodes_per_iter):
+        command = sample_command(buffer, last_few)
+        episode = generate_episode(env, stochastic_policy, command) # See Algorithm 2
+        buffer.add(episode)
+    
+    # Let's keep this buffer sorted
+    buffer.sort()
+
+def evaluate_agent(env, behavior, command, render=False):
+    '''
+    Evaluate the agent performance by running an episode
+    following Algorithm 2 steps
+    
+    Params:
+        env (OpenAI Gym Environment)
+        behavior (Behavior)
+        command (List of float)
+        render (bool) -- default False:
+            will render the environment to visualize the agent performance
+    '''
+    behavior.eval()
+    
+    print('\nEvaluation.', end=' ')
+        
+    desired_return = command[0]
+    desired_horizon = command[1]
+    
+    print('Desired return: {:.2f}, Desired horizon: {:.2f}.'.format(desired_return, desired_horizon), end=' ')
+    
+    all_rewards = []
+    
+    for e in range(n_evals):
+        
+        done = False
+        total_reward = 0
+        state = env.reset().tolist()
+    
+        while not done:
+            if render: env.render()
+            
+            state_input = torch.FloatTensor(state).to(device)
+            command_input = torch.FloatTensor(command).to(device)
+
+            action = behavior.greedy_action(state_input, command_input)
+            next_state, reward, done, _ = env.step(action)
+
+            total_reward += reward
+            state = next_state.tolist()
+
+            desired_return = min(desired_return - reward, max_reward)
+            desired_horizon = max(desired_horizon - 1, 1)
+
+            command = [desired_return, desired_horizon]
+        
+        if render: env.close()
+        
+        all_rewards.append(total_reward)
+    
+    mean_return = np.mean(all_rewards)
+    print('Reward achieved: {:.2f}'.format(mean_return))
+    
+    behavior.train()
+    
+    return mean_return
+
 def UDRL(env, buffer=None, behavior=None, learning_history=[]):
     '''
     Upside-Down Reinforcement Learning main algrithm
@@ -92,8 +227,44 @@ def UDRL(env, buffer=None, behavior=None, learning_history=[]):
                                                 hidden_size, 
                                                 learning_rate, 
                                                 [return_scale, horizon_scale])                                          
+    
+    for i in range(1, n_main_iter + 1):
+        mean_loss = train_behavior(behavior, buffer, n_updates_per_iter, batch_size)
+        print('Iter: {}, Loss: {:.4f}'.format(i, mean_loss), end='\r')
+        generate_episodes(env, 
+                          behavior, 
+                          buffer, 
+                          n_episodes_per_iter,
+                          last_few)
 
+        if i % evaluate_every == 0:
+            command = sample_command(buffer, last_few)
+            mean_return = evaluate_agent(env, behavior, command)
+            
+            learning_history.append({
+                'training_loss': mean_loss,
+                'desired_return': command[0],
+                'desired_horizon': command[1],
+                'actual_return': mean_return,
+            })
+            
+            if stop_on_solved and mean_return >= target_return: 
+                break
+
+    behavior.save("behavior.pth")
+    return behavior, buffer, learning_history                  
+    
 
 if __name__ == "__main__":
-    buffer = initialize_replay_buffer(replay_size, n_warm_up_episodes, last_few)
-    print(len(buffer))
+    # _, _, _ = UDRL(env)
+    behavior = Behavior(state_size, 
+                        action_size, 
+                        hidden_size, 
+                        [return_scale, horizon_scale])
+    
+    behavior.init_optimizer(lr=learning_rate)
+
+    behavior.load("behavior_orig.pth")
+    command = [3300, 1000]
+    mean_return = evaluate_agent(env, behavior, command, render=True)
+    print(mean_return)
