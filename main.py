@@ -10,10 +10,12 @@ np.random.seed(seed)
 torch.manual_seed(seed)
 
 
-env = gym.make('LunarLander-v2') # RocketLander-v0 | LunarLander-v2 | MountainCar-v0 | CartPole-v0
+env = gym.make("MountainCar-v0") # RocketLander-v0 | LunarLander-v2 | MountainCar-v0 | CartPole-v0 | Freeway-ram-v0
 _ = env.seed(seed)
+# print(env.observation_space)
 state_size = env.observation_space.shape[0]
 action_size = env.action_space.n
+
 
 def initialize_replay_buffer(replay_size, n_episodes, last_few):
     '''
@@ -36,9 +38,12 @@ def initialize_replay_buffer(replay_size, n_episodes, last_few):
     for i in range(n_episodes):
         command = sample_command(buffer, last_few)
         episode = generate_episode(env, random_policy, command) # See Algorithm 2
+        # print(episode.rewards)
         buffer.add(episode)
+        # print(episode.rewards)
     
     buffer.sort()
+    # quit()
     return buffer
 
 def initialize_behavior_function(state_size, 
@@ -93,27 +98,34 @@ def train_behavior(behavior, buffer, n_updates, batch_size):
         batch_actions = []
 
         for episode in episodes:
+            # print("REWARD: ", episode.rewards)
             T = episode.length
-            t1  = np.random.randint(0, T)
-            t2  = np.random.randint(t1+1, T+1)
-            dh = t2 - t1
-            dr = sum(episode.rewards[t1:t2])
+            if(T <= 6):
+                k = 2
+            else:    
+                k = np.random.randint(3, T - 3)
+            x = 0
+            for i in range(T - k + 1):
+                # T = episode.length
+                t1  = x#np.random.randint(0, T)
+                t2  = x + k - 1#np.random.randint(t1+1, T+1)
+                dh = t2 - t1
+                dr = sum(episode.rewards[t1:t2])
 
-            st1 = episode.states[t1]
-            at1 = episode.actions[t1]
+                st1 = episode.states[t1]
+                at1 = episode.actions[t1]
 
-            batch_states.append(st1)
-            batch_actions.append(at1)
-            batch_commands.append([dr, dh])
+                batch_states.append(st1)
+                batch_actions.append(at1)
+                batch_commands.append([dr, dh])
+                x += 1
 
         batch_states = torch.FloatTensor(batch_states).to(device)
         batch_commands = torch.FloatTensor(batch_commands).to(device)
         batch_actions = torch.LongTensor(batch_actions).to(device)
 
         pred = behavior(batch_states, batch_commands)
-
         loss = F.cross_entropy(pred, batch_actions)    
-
         behavior.optim.zero_grad()
         loss.backward()
         behavior.optim.step()
@@ -220,7 +232,7 @@ def UDRL(env, buffer=None, behavior=None, learning_history=[]):
         buffer = initialize_replay_buffer(replay_size, 
                                           n_warm_up_episodes, 
                                           last_few)
-
+    # quit()
     if behavior is None:
         behavior = initialize_behavior_function(state_size, 
                                                 action_size, 
@@ -230,7 +242,7 @@ def UDRL(env, buffer=None, behavior=None, learning_history=[]):
     
     for i in range(1, n_main_iter + 1):
         mean_loss = train_behavior(behavior, buffer, n_updates_per_iter, batch_size)
-        print('Iter: {}, Loss: {:.4f}'.format(i, mean_loss), end='\r')
+        print('Iter: {}, Loss: {:.4f}'.format(i, mean_loss))
         generate_episodes(env, 
                           behavior, 
                           buffer, 
@@ -251,13 +263,11 @@ def UDRL(env, buffer=None, behavior=None, learning_history=[]):
             if stop_on_solved and mean_return >= target_return: 
                 break
 
-    behavior.save("behavior.pth")
+            behavior.save("behavior_window.pth")
+    # buffer.save("buffer.npy")
     return behavior, buffer, learning_history                  
     
-
-if __name__ == "__main__":
-    # _, _, _ = UDRL(env)
-    print("max: ", env._max_episode_steps)
+def evaluate():
     behavior = Behavior(state_size, 
                         action_size, 
                         hidden_size, 
@@ -265,7 +275,12 @@ if __name__ == "__main__":
     
     behavior.init_optimizer(lr=learning_rate)
 
-    behavior.load("behavior_orig.pth")
-    command = [1, 1]
+    behavior.load("behavior_freeway.pth")
+    command = [100, 1]
     mean_return = evaluate_agent(env, behavior, command, render=True)
     print(mean_return)
+
+if __name__ == "__main__":
+    _, _, _ = UDRL(env)
+    # evaluate()
+    

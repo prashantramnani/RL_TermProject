@@ -9,7 +9,7 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 from constants import *
 
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-max_steps = 300
+
 
 def generate_episode(env, policy, init_command=[1, 1]):
     '''
@@ -38,6 +38,7 @@ def generate_episode(env, policy, init_command=[1, 1]):
     state = env.reset().tolist()
     
     while not done:
+        # env.render()
         state_input = torch.FloatTensor(state).to(device)
         command_input = torch.FloatTensor(command).to(device)
         action = policy(state_input, command_input)
@@ -73,7 +74,7 @@ def generate_episode(env, policy, init_command=[1, 1]):
     
         command = [desired_return, desired_horizon]
         time_steps += 1
-        
+    # env.close()    
     return make_episode(states, actions, rewards, init_command, sum(rewards), time_steps)
 
 def sample_command(buffer, last_few):

@@ -29,21 +29,23 @@ class Behavior(nn.Module):
         
         self.command_scale = torch.FloatTensor(command_scale).to(device)
         
-        self.state_fc = nn.Sequential(nn.Linear(state_size, 64), 
+        self.state_fc = nn.Sequential(nn.Linear(state_size, hidden_size), 
                                       nn.Tanh())
         
-        self.command_fc = nn.Sequential(nn.Linear(2, 64), 
+        self.command_fc = nn.Sequential(nn.Linear(2, hidden_size), 
                                         nn.Sigmoid())
         
-        self.output_fc = nn.Sequential(nn.Linear(64, 128), 
+        self.output_fc = nn.Sequential(nn.Linear(hidden_size, 2*hidden_size), 
                                        nn.ReLU(), 
 #                                        nn.Dropout(0.2),
-                                       nn.Linear(128, 128), 
+                                       nn.Linear(2*hidden_size, 2*hidden_size), 
                                        nn.ReLU(), 
 #                                        nn.Dropout(0.2),
-                                       nn.Linear(128, 128), 
+                                       nn.Linear(2*hidden_size, 2*hidden_size), 
+                                       nn.ReLU(),
+                                       nn.Linear(2*hidden_size, hidden_size), 
                                        nn.ReLU(), 
-                                       nn.Linear(128, action_size))
+                                       nn.Linear(hidden_size, action_size))
         
         self.to(device)
         
