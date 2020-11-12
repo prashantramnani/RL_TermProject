@@ -257,6 +257,7 @@ def UDRL(env, buffer=None, behavior=None, learning_history=[]):
 
 if __name__ == "__main__":
     # _, _, _ = UDRL(env)
+    print("max: ", env._max_episode_steps)
     behavior = Behavior(state_size, 
                         action_size, 
                         hidden_size, 
@@ -265,6 +266,6 @@ if __name__ == "__main__":
     behavior.init_optimizer(lr=learning_rate)
 
     behavior.load("behavior_orig.pth")
-    command = [3300, 1000]
+    command = [1, 1]
     mean_return = evaluate_agent(env, behavior, command, render=True)
     print(mean_return)
