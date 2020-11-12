@@ -210,6 +210,9 @@ def evaluate_agent(env, behavior, command, render=False):
     
     mean_return = np.mean(all_rewards)
     print('Reward achieved: {:.2f}'.format(mean_return))
+    file = open('LOG.txt', 'a') 
+    f.write('Reward achieved: {:.2f}'.format(mean_return))
+    f.close()
     
     behavior.train()
     
@@ -239,10 +242,15 @@ def UDRL(env, buffer=None, behavior=None, learning_history=[]):
                                                 hidden_size, 
                                                 learning_rate, 
                                                 [return_scale, horizon_scale])                                          
-    
+    f = open('LOG.txt', 'w')
+    f.close()
     for i in range(1, n_main_iter + 1):
+        
         mean_loss = train_behavior(behavior, buffer, n_updates_per_iter, batch_size)
         print('Iter: {}, Loss: {:.4f}'.format(i, mean_loss))
+        f = open('LOG.txt', 'a') 
+        f.write('Iter: {}, Loss: {:.4f} \n'.format(i, mean_loss))
+        f.close()
         generate_episodes(env, 
                           behavior, 
                           buffer, 

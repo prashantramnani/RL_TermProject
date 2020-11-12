@@ -1,28 +1,24 @@
 #include <bits/stdc++.h>
 using namespace std;
 
+#define MOD 1000000007
+
 int main() {
-    int N;
-    cin >> N;
-    if(N<2) {
-        cout << "Invalid Input" << endl;
+    int T;
+    cin >> T;
+    vector<long long int> fib(46, 1);
+    for(int i=3;i<=45;++i) {
+        fib[i] = (fib[i-1] + fib[i-2])%MOD;
     }
-    int a[N];
-    for(int i=0;i<N;++i) {
-        cin >> a[i];
-    }
-    sort(a, a+N);
-    int flag = 0;
-    for(int i=0;i<N-1;++i) {
-        if(a[i] != a[i+1]){
-            flag = 1;
-            break;
+    while(T --) {
+        int n;
+        cin >> n;
+        if(n < 3) {
+            cout << 1 << endl;
         }
-    }
-    if(flag == 1) {
-        cout << a[0] << " " << a[1] << endl;
-    }
-    else {
-        cout << "Equal" << endl;
+        else {
+            long long int temp = ((fib[2*n - 5]%MOD)*(fib[2*n - 3]%MOD))%MOD;
+            cout << temp << endl;
+        }
     }
 }
